@@ -27,9 +27,16 @@ class EventDatasetFromUpsampledSaliency(Dataset):
                        verbose=False,
                        save_xypt = False,
                        limit=-1,
-                       grids_dtype=np.float16):
+                       grids_dtype=np.float16,
+                       input_video="optical_flow"):
 
-        self.preprocessing_params = preprocessing_params 
+        self.preprocessing_params = preprocessing_params
+
+        # "optical_flow": video_upsampled_using_optical_flow.mp4 + timestamps_OF (all paper DVS runs)
+        # "fixed_200fps": video_upsampled_fps_eq_200.mp4 + timestamps_FF, the video the retina reads
+        if input_video not in ("optical_flow", "fixed_200fps"):
+            raise ValueError(f"input_video must be 'optical_flow' or 'fixed_200fps', got {input_video!r}")
+        self.input_video = input_video
 
         self.directory = directory
         self.mode = mode
@@ -71,7 +78,8 @@ class EventDatasetFromUpsampledSaliency(Dataset):
 
         # Cache filename builder bound with thresholds
         self._mk_paths = lambda folder: _mk_cache_paths_events(
-            folder, self.B, self.contrast_threshold_neg, self.contrast_threshold_pos
+            folder, self.B, self.contrast_threshold_neg, self.contrast_threshold_pos,
+            version="v2" if input_video == "optical_flow" else "v2_ff200"
         )
 
     def __len__(self):
@@ -206,9 +214,16 @@ class EventDatasetFromUpsampledSaliency(Dataset):
 
 
         # slow path ( first time read and data cacheing)
-        frames = self._load_video_gray(os.path.join(folder, "video_upsampled_using_optical_flow.mp4"))  # (N, H, W), uint8
-        timestamps = np.asarray(properties["timestamps_OF"], dtype=np.float64)
-        images = properties["new_images_per_pair_OF"]  # list of counts per segment
+        if self.input_video == "optical_flow":
+            frames = self._load_video_gray(os.path.join(folder, "video_upsampled_using_optical_flow.mp4"))  # (N, H, W), uint8
+            timestamps = np.asarray(properties["timestamps_OF"], dtype=np.float64)
+            images = properties["new_images_per_pair_OF"]  # list of counts per segment
+        else:
+            frames = self._load_video_gray(os.path.join(folder, "video_upsampled_fps_eq_200.mp4"))
+            timestamps = np.asarray(properties["timestamps_FF"], dtype=np.float64)
+            images = properties["new_images_per_pair_FF"]  # one segment per source frame, the last one extrapolated
+        if len(frames) != len(timestamps):
+            raise ValueError(f"{folder}: {len(frames)} frames but {len(timestamps)} timestamps ({self.input_video})")
         timestamps_ns = (timestamps * 1e9).astype("int64")
 
         # read the output frames and resize to the frame size
@@ -298,7 +313,11 @@ class EventDatasetFromUpsampledSaliency(Dataset):
             grids.append(g)
 
         event_grids = torch.stack(grids, dim=0)
-        
+        if self.input_video == "fixed_200fps":
+            # drop the segment after the last source frame, so there is one grid per pair of
+            # source frames, as for the optical-flow video and the retina loader
+            event_grids = event_grids[:-1]
+
         # normalize the outputs 
         outputs = outputs.astype(np.float32) / 255.0
 

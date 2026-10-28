@@ -281,6 +281,10 @@ if __name__ == "__main__":
     log_input = config.get("log_input", True)
     config["log_input"] = log_input
 
+    # upsampled video the DVS reads: "optical_flow" (all original DVS runs) or "fixed_200fps" (the retina's input)
+    dvs_input_video = config.get("dvs_input_video", "optical_flow")
+    config["dvs_input_video"] = dvs_input_video
+
     skip_frames = config.get("skip_frames", False)
     config["skip_frames"] = skip_frames
 
@@ -301,7 +305,8 @@ if __name__ == "__main__":
                                    log_scale=log_input,
                                    force_recomputing=force_recomputing,
                                    limit=config["train_limit"],
-                                   verbose=verbose)
+                                   verbose=verbose,
+                                   input_video=dvs_input_video)
 
     train_dataset = SaliencyDatasetWrapper(train_base,
                                            sequence_length=config['sequence_length'],
@@ -315,7 +320,8 @@ if __name__ == "__main__":
                                    log_scale=log_input,
                                    force_recomputing=force_recomputing,
                                    limit=config["val_limit"],
-                                   verbose=verbose)
+                                   verbose=verbose,
+                                   input_video=dvs_input_video)
 
     val_dataset = SaliencyDatasetWrapper(val_base,
                                          sequence_length=config['sequence_length'],

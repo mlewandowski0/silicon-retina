@@ -1,0 +1,54 @@
+{
+        "num_bins": 5,
+        "num_prev_images": 3,
+
+        "burn_in_steps" : 10,
+        "sequence_length": 30,
+
+        "hid1" : 32,
+        "ks1" : 3,
+        "add_bn" : true,
+        "out_mode" : "density",
+
+        "use_amp" : true,
+        "amp_dtype" : "fp16",
+
+        "force_recomputing" : false,
+        "log_input" : true,
+        "dvs_input_video" : "fixed_200fps",
+
+        "data_root": "src/neural_network/data/saliency_dataset_upsampled",
+        "cache_folder": "src/neural_network/data/saliency_dataset_upsampled",
+        "train_limit": null,
+        "val_limit": null,
+        "skip_frames": 1,
+        "check_dataset" : true,
+
+        "batch_size": 2,
+        "num_epochs": 200,
+        "learning_rate": 1e-4,
+        "weight_decay": 1e-4,
+        "lr_step_size": 10,
+        "lr_gamma": 0.9,
+        "prefetch_factor" : 5,
+        "dropout_rate" : 0.2,
+        "augment" : true,
+        "skip_type" : "sum",
+
+        "debug_save" : true,
+        "debug_iters" : 500,
+        "debug_folder": "src/neural_network/debug/FIRE_events_saliency_fixed_200fps",
+
+        "use_lpips": true,
+
+        "checkpoint_dir": "src/neural_network/checkpoints/FIRE_events_saliency_fixed_200fps",
+        "save_every": 5,
+        "keep_last_n_checkpoints": 5,
+
+        "num_workers": 10,
+        "use_wandb": true,
+        "event_representation_params" : {
+            "contrast_threshold_neg" : 0.2,
+            "contrast_threshold_pos" : 0.2
+        }
+    }

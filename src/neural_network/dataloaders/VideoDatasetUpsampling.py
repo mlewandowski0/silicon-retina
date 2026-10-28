@@ -290,8 +290,11 @@ class VideoDatasetUpsampling(Dataset):
 class VideoDatasetUpsamplingCacheToFolder(Dataset):
     def __init__(self, upsamplingDataset : VideoDatasetUpsampling,
                  output_path, save_mp4=True, bit_depth=8,
-                 start_index = 0, override=False, save_optical_flow=True):
+                 start_index = 0, override=False, save_optical_flow=True, folder_names=None):
         self.upsamplingDataset = upsamplingDataset
+        # output folder of item i; default video_{i:05d}. A list keeps the paper's clip IDs when
+        # caching a subset (reproducibility/regenerate.py)
+        self.folder_names = folder_names
         self.output_path = output_path
         self.save_mp4 = save_mp4
         self.bit_depth = bit_depth
@@ -300,6 +303,9 @@ class VideoDatasetUpsamplingCacheToFolder(Dataset):
         self.save_optical_flow = save_optical_flow
         self.data = []
         self._cache()
+
+    def _folder_name(self, i):
+        return self.folder_names[i] if self.folder_names is not None else f"video_{i:05d}"
 
     def _write_mp4(self, frames_f32, out_path, fps):
         """Save float32 [0,1] RGB video to MP4, 8- or 10-bit."""
@@ -387,7 +393,7 @@ class VideoDatasetUpsamplingCacheToFolder(Dataset):
 
         # helper: decide if sample i is already complete
         def is_done(i: int) -> bool:
-            root = os.path.join(self.output_path, f"video_{i:05d}")
+            root = os.path.join(self.output_path, self._folder_name(i))
             mp4_name = "video_upsampled_using_optical_flow.mp4" if upsample_to_events \
                     else f"video_upsampled_fps_eq_{new_framerate}.mp4"
             return os.path.exists(os.path.join(root, "params.json")) and os.path.exists(os.path.join(root, mp4_name))
@@ -414,7 +420,7 @@ class VideoDatasetUpsamplingCacheToFolder(Dataset):
 
         pbar = tqdm.tqdm(range(start_index, len(self.upsamplingDataset)))
         for idx, i in enumerate(pbar, start=start_index):
-            root_folder = os.path.join(self.output_path, f"video_{i:05d}")
+            root_folder = os.path.join(self.output_path, self._folder_name(i))
             Path(root_folder).mkdir(parents=True, exist_ok=True)
 
             # skip if already done and not overriding

@@ -26,7 +26,7 @@ This repository contains the code, configurations, experiment records and figure
 - [Repository map](#repository-map) · [Where is…?](#where-is)
 - [Quick start (no dataset needed)](#quick-start-no-dataset-needed)
 - [The retina model and its implementations](#the-retina-model-and-its-implementations)
-- [Reproducing the experiments](#reproducing-the-experiments): [data](#1-data-and-models) · [pipeline](#2-pipeline) · [figure → code table](#3-paper-figures--code)
+- [Reproducing the experiments](#reproducing-the-experiments): [data](#1-data-and-models) · [pipeline](#2-pipeline) · [figure → code table](#3-paper-figures--code) · [local data regeneration](reproducibility/README.md)
 - [Hardware](#hardware): [SCAMP-5](#scamp-5-pixel-processor-array) · [VD55G0 live demo](#vd55g0--gpu-live-demo)
 - [Reproducibility notes](#reproducibility-notes)
 - [Third-party components](#third-party-components) · [Citation](#citation)
@@ -58,6 +58,7 @@ This repository contains the code, configurations, experiment records and figure
 │   ├── synthetic_data/                  # tiny synthetic datasets + configs to run every training script
 │   └── history/                         # the original job scripts, kept verbatim as a record of what was run
 ├── paper-figures/                       # notebooks + W&B exports that produce the paper figures  → README inside
+├── reproducibility/                     # source data, exact splits (manifests), experiment map, local regeneration  → README inside
 ├── results/                             # hyper-parameter search studies, dataset-curation plots  → README inside
 ├── visualizations/                      # rendered example videos (DVS / retina events on DHF1K and ECOCO)
 ├── docs-src/ → docs/                    # MkDocs project notes, published at https://mlewandowski0.github.io/sillicon-retina/
@@ -112,7 +113,7 @@ bash scripts/synthetic_data/run_synthetic_pipeline.sh
 > If the `esim_torch` build fails with an architecture error, set your GPU's compute capability explicitly, e.g.
 > `TORCH_CUDA_ARCH_LIST="8.6" pip install -e src/neural_network/reusing_videos/esim_torch --no-build-isolation`.
 
-To run the paper-figure notebooks you only need the CPU packages: `pip install -r requirements.txt`, then open `paper-figures/*.ipynb` with `paper-figures/` as the working directory.
+To run the paper-figure notebooks you only need the CPU packages: `pip install -r requirements.txt`, then open `paper-figures/*.ipynb` with `paper-figures/` as the working directory. The SciencePlots `science` style they use also needs a LaTeX installation; without one, add `'no-latex'` to the style lists.
 
 ---
 
@@ -174,15 +175,26 @@ Real on-chip outputs over time (I<sub>OPL</sub>, V<sub>LIF</sub> and the spike m
 
 ### 1. Data and models
 
-None of these are in the repository. All paths are relative to the repository root, and every script must be run from the root.
+The datasets, upsampled videos, event caches and trained checkpoints are **not hosted**. Download the sources from their original providers, then regenerate the derived data locally. **[`reproducibility/`](reproducibility/README.md)** contains:
 
-| What | Where the code expects it | How to get it |
+* where to get each source and which variant was used ([`sources.md`](reproducibility/sources.md));
+* the exact clips, splits and checksums of every experiment ([`manifests/`](reproducibility/manifests/)): DHF1K 541 clips, **431 train / 110 val**, and the 159 excluded clips with reasons; ECOCO 948 train / 51 validation sequences;
+* a map from paper experiments to configs, run records and result files ([`experiments.yaml`](reproducibility/experiments.yaml));
+* a regeneration command, with a smoke-test mode that processes one training and one validation clip per task in about 2 minutes.
+
+```bash
+python -m reproducibility.regenerate --task saliency  --subset smoke --source-root /path/to/DHF1K --out /path/to/scratch
+python -m reproducibility.regenerate --task intensity --subset smoke --source-root /path/to/ecoco_depthmaps_test --out /path/to/scratch
+# --dry-run validates the sources against the manifests first; --subset full processes every clip (resumable)
+```
+
+| What | Source | Where the training code expects it |
 |---|---|---|
-| FILM interpolation weights | `models/film_net/Style/saved_model` | `bash scripts/setup/download_model.sh` |
-| DHF1K (saliency) | `src/neural_network/data/saliency_dataset_processed` → `…_truncated` → `…_upsampled` → `…_ready/{train,val}` | Download DHF1K, then follow [src/neural_network/README.md](src/neural_network/README.md#dataset-preparation) |
-| ECOCO (intensity reconstruction) | `src/neural_network/data/ecoco_depthmaps_test` → `upsampled_{train,validation}` | `mkdir -p src/neural_network/data && cd src/neural_network/data && bash ../download.sh && unzip ecoco_depthmaps_test.zip` (48 GB) |
+| FILM interpolation weights | `bash scripts/setup/download_model.sh` | `models/film_net/Style/saved_model` |
+| DHF1K (saliency) | [github.com/wenguanwang/DHF1K](https://github.com/wenguanwang/DHF1K), clips 001–700 | `src/neural_network/data/saliency_dataset_ready/{train,val}` (link the regenerated `upsampled-*` folder there) |
+| ECOCO (intensity reconstruction) | `ecoco_depthmaps_test.zip` (48 GB), see `src/neural_network/download.sh` | `src/neural_network/data/upsampled_{train,validation}` |
 
-DVS and retina events are generated on the fly from the upsampled videos the first time each video is used. They are cached as `cache_*.npy` next to the video.
+All paths are relative to the repository root, and every script must be run from the root. During training, DVS and retina events are generated from the upsampled videos the first time each video is used and cached as `cache_*.npy` next to the video. FILM upsampling is not bit-exact on GPUs, so regenerated data match the originals statistically rather than bit for bit. The measured tolerances, and the experiments whose inputs cannot be exactly regenerated from the released code, are listed in [`reproducibility/README.md`](reproducibility/README.md#reproducibility-limits).
 
 ### 2. Pipeline
 
@@ -215,8 +227,10 @@ python -m src.neural_network.experiment.<module> -c src/neural_network/configs/<
 | High-pass filter formulation | [`saliency_hpf_ablation.sh`](scripts/paper/saliency_hpf_ablation.sh) | `analysis_saliency.ipynb` |
 | Spatial kernel size | [`saliency_kernel_ablation.sh`](scripts/paper/saliency_kernel_ablation.sh) | `analysis_saliency.ipynb` |
 | Loss vs event sparsity | [`saliency_sparsity_sweep.sh`](scripts/paper/saliency_sparsity_sweep.sh) | `analysis_saliency.ipynb` |
-| Fixed-rate vs optical-flow upsampling | see [paper-figures/README.md](paper-figures/README.md) | `analysis_saliency.ipynb` |
+| Fixed-rate vs optical-flow upsampling | see [`experiments.yaml`](reproducibility/experiments.yaml) (the fixed-rate DVS runs used code that was not committed) | `analysis_saliency.ipynb` |
 | Retina parameter search | [`hyperparameter_search.sh`](scripts/paper/hyperparameter_search.sh) | studies in [`results/hyperparameter_search/`](results/hyperparameter_search/) |
+
+[`reproducibility/experiments.yaml`](reproducibility/experiments.yaml) records, for each row, the configs the plotted runs were actually launched with, the upsampled input each side read, and the gaps in the run records. [`reproducibility/audit.md`](reproducibility/audit.md) gives the evidence.
 
 <p align="center">
   <img src="media/readme/intensity_loss.png" width="49%" alt="Intensity reconstruction training and validation loss, DVS vs retina events">

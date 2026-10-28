@@ -55,7 +55,7 @@ The fields in each config are:
 | `saliency/retina/christmas_run/` | Tuned retina (`best.json`) and its ablations: feedback (`best_no_feedback`, `best_quad_abs_fb`, `best_quad_fb`), HPF modes (`best_t1..t4[a]`), p₂ sparsity sweep (`best_b1..b5`), spatial kernels (`best_k_eq_*`, `best_no_spatial`) |
 | `saliency/retina/kernel_sweep/`, `kernel_sweep_ks1/` | Spatial kernel size/type of the gain-control (`kernel2`) and OPL (`kernel1`) stages |
 | `saliency/retina/fb_run/` | Quadratic-feedback reruns |
-| `saliency/retina/*.json` | Earlier p₂ sweeps and sequence-length / kernel variants (incl. the main comparison run `…p2_eq_1.0_seq=50_gk5.json`) |
+| `saliency/retina/*.json` | Earlier p₂ sweeps and sequence-length / kernel variants (incl. `…p2_eq_1.0_seq=30_gk7.json`, the config of the main-comparison retina run) |
 | `saliency/events/` | DVS baseline (`FIREnetwork_event_saliency_seq=50.json`) and contrast-threshold variants; `*_create.json` force event re-generation |
 | `saliency/events/thr_sweep/` | DVS contrast-threshold sweep (sparsity figure) |
 | `saliency_sweeps/`, top-level `FIREnetwork_retina_saliency*.json` | Early saliency runs |
@@ -71,22 +71,29 @@ All commands are run from the repository root. Upsampling needs TensorFlow and t
 
 ### DHF1K (video saliency)
 
+The exact clips and split of the paper are in [`reproducibility/manifests/`](../../reproducibility/manifests/), and
+`python -m reproducibility.regenerate` runs steps 1 and 3 (and the event generation) for any subset of them,
+writing to a directory of your choice. The commands below are the original whole-dataset procedure.
+
 ```bash
 D=src/neural_network/data
-# 1. reorganise the raw DHF1K download (video-*/video/*.AVI, annotation-*/annotation/*) into NNNN/{input.AVI, maps.mp4}
-python -m src.neural_network.help_scripts.reorder_saliency_map_ds --input_path /path/to/DHF1K --output_path $D/saliency_dataset_processed
-# 2. keep clips shorter than 900 frames
-python -m src.neural_network.help_scripts.copy_short_videos --root $D/saliency_dataset_processed --dest $D/saliency_dataset_truncated --max-frames 900
-# 3. FILM-upsample every clip -> saliency_dataset_upsampled/  (resumable; restarts the worker after crashes)
+# 1. reorganise the raw DHF1K download (video/*.AVI, annotation/NNNN/maps/*.png) into NNNN/{input.AVI, maps.mp4}
+python -m src.neural_network.help_scripts.reorder_saliency_map_ds --input_path /path/to/DHF1K --output_path $D/saliency_dataset_processed \
+       --video_subdir video --annotation_subdir annotation
+# 2. keep clips shorter than 750 frames (542 clips). The paper then removed clip 0058 by hand, because
+#    optical-flow upsampling failed on it with the code of the time -> 541 clips
+python -m src.neural_network.help_scripts.copy_short_videos --root $D/saliency_dataset_processed --dest $D/saliency_dataset_truncated --max-frames 750
+rm -r $D/saliency_dataset_truncated/0058
+# 3. FILM-upsample every clip -> saliency_dataset_upsampled/video_NNNNN (i-th clip in sorted order; resumable)
 python -m src.neural_network.help_scripts.upsample_until_success                    # optical-flow-adaptive video (DVS loaders)
 UPSAMPLE_FPS=200 python -m src.neural_network.help_scripts.upsample_until_success   # fixed 200 FPS video (retina loaders)
-# 4. 80/20 train/val split per clip-length bin (seed 49210) -> saliency_dataset_ready/{train,val} + split.json
+# 4. 80/20 train/val split per clip-length bin (seed 49210) -> saliency_dataset_ready/{train,val} + split.json (431/110)
 python -m src.neural_network.data_help.partition_saliency
 ```
 
-Step 3 writes two videos per clip. `video_upsampled_using_optical_flow.mp4` is produced by adaptive bisection driven by FILM optical flow and is read by the DVS loaders. `video_upsampled_fps_eq_200.mp4` is the fixed-rate video, read by the silicon-retina loaders and by `partition_saliency.py`.
+Step 3 writes two videos per clip. `video_upsampled_using_optical_flow.mp4` is produced by adaptive bisection driven by FILM optical flow and is read by the DVS loaders. `video_upsampled_fps_eq_200.mp4` is the fixed-rate video, read by the silicon-retina loaders and by `partition_saliency.py`. The split depends only on the clip lengths and the seed, but `reproducibility/manifests/dhf1k_saliency_split.csv` is the authoritative record.
 
-TensorFlow runs FILM on the GPU if it finds a CUDA 12 runtime, and falls back to the CPU otherwise. The CPU is fine for testing but slow for the full dataset.
+TensorFlow runs FILM on the GPU if it finds a CUDA 12 runtime, and falls back to the CPU otherwise. The CPU is fine for testing but slow for the full dataset. FILM on the GPU is not bit-exact between runs (see `reproducibility/README.md`).
 
 ### ECOCO (intensity reconstruction)
 

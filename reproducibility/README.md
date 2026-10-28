@@ -1,0 +1,107 @@
+# `reproducibility`: rebuilding the paper's inputs locally
+
+The large data behind the paper are **not hosted**. That covers the source datasets, the
+FILM-upsampled videos, the event caches and the trained checkpoints. This folder holds what you need
+to identify the exact inputs, download the sources from their original providers, and regenerate the
+derived data on your own machine with the code that was used for the paper.
+
+| File | Contents |
+|---|---|
+| [`sources.md`](sources.md) | Where to get DHF1K, Event-MS-COCO and the FILM weights, which variant was used, checksums, software versions |
+| [`manifests/dhf1k_saliency_split.csv`](manifests/dhf1k_saliency_split.csv) | The 541 DHF1K clips used for saliency: source ID and path, frame count, processed ID (`video_NNNNN`), **train/val membership (431/110)**, SHA-256 of the source video |
+| [`manifests/dhf1k_saliency_exclusions.csv`](manifests/dhf1k_saliency_exclusions.csv) | The other 159 annotated clips and why each was excluded |
+| [`manifests/ecoco_intensity_split.csv`](manifests/ecoco_intensity_split.csv) | The 948 + 51 ECOCO sequences used for intensity reconstruction: ID, split, frames, timestamps, processed ID, content hash |
+| [`experiments.yaml`](experiments.yaml) | Paper experiment → inputs → configs as run → numerical results → notebook, with what the records do not establish |
+| [`audit.md`](audit.md) | What the pipeline actually did, with evidence, and the open questions |
+| [`validation_report.md`](validation_report.md) | What was checked on real data, how, and the results |
+| [`regenerate.py`](regenerate.py) | Local regeneration (below) |
+| [`tools/`](tools/), [`records/`](records/) | How the manifests were derived from the lab records, and log extracts |
+| [`environment-validation-freeze.txt`](environment-validation-freeze.txt) | Package versions used for the validation |
+
+## Smallest example (one training + one validation clip per task)
+
+Install the environment as in the root README, download the FILM weights
+(`bash scripts/setup/download_model.sh`) and the source datasets (`sources.md`). Then, from the
+repository root:
+
+```bash
+OUT=/path/to/local/scratch        # created if missing; nothing is written anywhere else
+
+# check the inputs against the manifests and print the plan (writes nothing)
+python -m reproducibility.regenerate --task saliency  --subset smoke --source-root /path/to/DHF1K --out $OUT --dry-run
+# DHF1K: clips 343 (train) and 585 (val), frames 0-30
+python -m reproducibility.regenerate --task saliency  --subset smoke --source-root /path/to/DHF1K --out $OUT
+# ECOCO: sequences 464 (train) and 999 (validation), whole sequences
+python -m reproducibility.regenerate --task intensity --subset smoke --source-root /path/to/ecoco_depthmaps_test --out $OUT
+```
+
+`--source-root` for DHF1K is the folder containing `video/` and `annotation/`. Use `--video-dir` and
+`--annotation-dir` if they are elsewhere. The command also accepts the restructured `NNNN/input.AVI`
+layout written by `help_scripts/reorder_saliency_map_ds.py`.
+
+Each run takes about 1–2 minutes on one RTX 4090 and needs well under 1 GB. It ends with a summary like:
+
+```text
+     train video_00261 <- 343 frames 0-31: 200 FPS 207 frames [0.000, 1.030] s, optical flow 414 frames [0.000, 0.998] s
+-- retina_ff200 (retina) -> $OUT/saliency/events/retina_ff200-f66876054181
+   video_00261: grids [30, 5, 180, 320] finite=True nonzero voxels 0.0614; events 312896 (+168371/-144525), ...
+```
+
+It also writes a provenance record to `$OUT/provenance/`. The record lists the input IDs, frame ranges
+and hashes, the resolved settings, the code commit, the package, GPU and ffmpeg versions, the
+statistics, the timings and the disk use. The fingerprints and counts above come from the validation
+run; your fingerprints differ if the code or FILM weights differ, and your counts are expected to differ
+slightly (see *Reproducibility limits*).
+
+Useful options:
+
+* `--repeat` generates the events twice and compares them.
+* `--reference-root DIR` compares against an existing upsampled dataset (read only).
+* `--variants`, and `--set VARIANT.KEY=VALUE` (e.g. `--set retina_ff200.silicon_retina_config.p2=1.25`), regenerate other configurations.
+* `--frames N|all` changes the window.
+* `--stages` runs part of the pipeline.
+
+## What the stages do
+
+| Stage | Code used | Settings |
+|---|---|---|
+| prepare (DHF1K) | `help_scripts/reorder_saliency_map_ds.reorder_clip` | AVI copied byte for byte; annotation PNGs → `maps.mp4` (30 fps) |
+| upsample | `dataloaders/VideoDatasetUpsampling.py` (FILM), as `upsample_worker_gpu.py` (DHF1K, `mixed_float16`) and `upsampling_dataset_prototyping.py` (ECOCO) | DHF1K 30 fps, ×0.5 INTER_AREA → 180×320; ECOCO 27 fps, 240×180. Two videos per clip: fixed 200 FPS and optical-flow adaptive (≤ 16 frames per pair) |
+| events | the training scripts' dataset classes, built from the paper configs | see `experiments.yaml`; output = the training caches (`cache_*.npy`) |
+
+Variants generated by default:
+
+| Task | Variant | Config | Events from |
+|---|---|---|---|
+| saliency | `retina_ff200` | `…/FIREnetwork_retina_saliency_p2_eq_1.0_seq=30_gk7.json` | 200 FPS video |
+| saliency | `dvs_of` | `…/FIREnetwork_event_saliency_seq=50.json` (ESIM, log, C = 0.2) | optical-flow video |
+| saliency | `retina_of` | same retina config, `use_upsampled_from_OF=true` | optical-flow video |
+| intensity | `dvs_of` (log input, as trained), `dvs_of_linear` | `FIREnetwork.json` (5 bins), log / linear input | optical-flow video |
+| intensity | `retina_ff200` | `FIREnetwork_event_bins_eq2.json` | 200 FPS video |
+
+## Full regeneration
+
+The same command with `--subset full` processes every clip in the manifests. It is resumable: per clip
+for upsampling, per clip and variant for events. Measured and estimated sizes are in
+`validation_report.md` §3. Roughly, about 75 GB for the DHF1K upsampled data and about 350 GiB per
+DHF1K retina event variant, so generate only the variants you need (`--variants`). Training reads fixed
+paths. To train on regenerated data, link the folders:
+
+```bash
+mkdir -p src/neural_network/data
+ln -s $OUT/saliency/upsampled-all-<fp>               src/neural_network/data/saliency_dataset_ready
+ln -s $OUT/intensity/upsampled-all-<fp>/train        src/neural_network/data/upsampled_train
+ln -s $OUT/intensity/upsampled-all-<fp>/validation   src/neural_network/data/upsampled_validation
+```
+
+The training scripts then build their own event caches inside those folders on first use. Those caches
+are keyed by the loaders' own (incomplete) rules; see `audit.md`, *Cache identity*.
+
+## Reproducibility limits
+
+* **FILM upsampling is not bitwise reproducible**, even on the same machine: about 1.5–2 grey levels mean difference, 38–40 dB PSNR. Retina events computed from a given upsampled video are bitwise reproducible. DVS event lists are too; DVS voxel grids differ in ≈ 0.001 % of voxels. Regenerated event datasets are therefore statistically, not bitwise, equal to the originals. Expect run-to-run variation in trained results as well, since training is unseeded.
+* **Not everything plotted can be regenerated with the released code.** See `experiments.yaml` and `audit.md`:
+  - the main saliency retina run and the ECOCO retina runs used the retina kernel before commit `396ebf1`;
+  - the "DVS (Fixed 200 FPS)" curve of Fig. 12 has wrongly timed events (see `audit.md`);
+  - the ECOCO DVS baseline logged linear input but trained on log-input caches; `FIREnetwork.json` now states log input.
+* The DHF1K split is the paper's own 431/110 re-split of 541 clips, **not** the official DHF1K train/val split.

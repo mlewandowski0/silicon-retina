@@ -1,0 +1,40 @@
+% Proposed Data Availability and Code Availability statements.
+% Before submission, check the items marked TODO and the author checklist in the handover:
+% the 431/110 split, the journal's data-deposition policy, and the hardware recordings.
+
+\section*{Data Availability}
+This study uses two third-party datasets, which are not redistributed with this article.
+Video saliency experiments use the DHF1K dataset~\cite{wang2018revisiting}. Its videos and saliency
+annotations are available from the dataset authors via \url{https://github.com/wenguanwang/DHF1K}, under
+the conditions set by them. Intensity-reconstruction experiments use the frames of the depth-map variant
+of the Event-MS-COCO sequences~\cite{rebecq2019high} (archive \texttt{ecoco\_depthmaps\_test.zip}), which
+the Robotics and Perception Group, University of Zurich, makes available for download.
+% TODO: confirm the preferred citation and terms of use of the ECOCO archive with UZH-RPG.
+Frame interpolation uses the publicly released FILM weights~\cite{reda2022film}.
+
+The exact inputs of every experiment are published in the code repository (\texttt{reproducibility/}).
+For each dataset, a machine-readable manifest lists the source clips and their checksums, the
+train/validation assignment and the frames used. For DHF1K, this is 541 of the 700 annotated clips,
+split into 431 training and 110 validation clips; a separate list gives the reason for each excluded
+clip.
+% TODO: the manuscript currently states 441/100; the run records support 431/110.
+The repository also maps each figure to the configuration files used.
+
+The derived data are not deposited because of their size (several hundred gigabytes); they comprise
+the temporally upsampled videos and the DVS and silicon-retina event tensors. They can be regenerated
+from the original datasets with the published code and manifests, using the documented commands. The
+FILM interpolation step is not bit-exact on GPUs, so regenerated event data match the originals
+statistically rather than bit for bit; the repository documents the measured tolerances.
+
+The numerical data underlying the plots (training and validation losses per run, and the event-occupancy
+values) are provided as CSV files and notebooks in the repository (\texttt{paper-figures/}).
+% TODO: list here which hardware recordings (SCAMP-5 host-app captures, VD55G0 recording) are
+% available and how, once decided; only paper-figures/high_speed_output.mp4 is currently in the repository.
+
+\section*{Code Availability}
+The source code is available at \url{https://github.com/mlewandowski0/sillicon-retina}. It covers the
+silicon-retina model (CUDA, SCAMP-5 and NumPy implementations), the data-preparation and
+event-generation pipeline, the training configurations and the figure notebooks.
+% TODO: cite a fixed release (tag and/or archived DOI) rather than the default branch.
+Trained network weights are not released.
+% TODO: change the line above if checkpoints are deposited.

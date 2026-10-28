@@ -281,7 +281,15 @@ bash scripts/runpod/dvs_fixed_200fps.sh 3                 # 3 runs, ~6.7 h each 
 
 Logs, configs and checkpoints are written to `/workspace/{logs,configs,checkpoints}`. If the pod restarts, re-running the script skips finished setup steps and runs.
 
-**3. Figure.** Export `train_loss_epoch` and `val_loss_epoch` of the three runs from W&B (project `e2vid-saliency2`) into `paper-figures/analysis/comparison_{train,val}_loss.csv`. They replace the columns `FIREnetwork_20260211_131459`, `FIREnetwork_20260211_200608` and `FIREnetwork_20260212_025427`; update the column lists in `paper-figures/analysis_saliency.ipynb` (cells 33–37) to match. Then re-run the notebook.
+**3. Figure.** Insert the three new runs in place of the old fixed-rate runs (`FIREnetwork_20260211_131459`, `…_200608`, `FIREnetwork_20260212_025427`) in `paper-figures/analysis/comparison_{train,val}_loss.csv` and in the notebook. Then re-run the notebook:
+
+```bash
+wandb login
+python scripts/runpod/export_fig12_runs.py --entity <W&B entity>
+cd paper-figures && jupyter nbconvert --to notebook --execute analysis_saliency.ipynb --output analysis_saliency.ipynb
+```
+
+The pod needs a volume of at least 300 GB: 31 GB of data plus about 212 GB of DVS event caches built during the first run. A step-by-step brief for running this over SSH (checks, monitoring, failure handling) is in [`scripts/runpod/AGENT_BRIEF.md`](scripts/runpod/AGENT_BRIEF.md). The manuscript corrections are listed in [`reproducibility/paper_corrections.md`](reproducibility/paper_corrections.md).
 
 ---
 

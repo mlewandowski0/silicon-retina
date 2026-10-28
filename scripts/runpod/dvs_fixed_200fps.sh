@@ -48,11 +48,15 @@ ln -sfn "$DATA/saliency_dataset_ready" src/neural_network/data/saliency_dataset_
 for i in $(seq 1 "$RUNS"); do
     name=DVS_fixed_200fps_run$i
     [ -f "$WORK/logs/$name.done" ] && { echo "skip $name (done)"; continue; }
+    # NUM_WORKERS / PREFETCH_FACTOR (optional) only change data loading, e.g. on a pod with little RAM
     python - "$CONFIG" "$WORK/configs/$name.json" "$name" "$WORK" <<'EOF'
-import json, sys
+import json, os, sys
 src, dst, name, work = sys.argv[1:]
 c = json.load(open(src))
 c.update(wandb_name=name, checkpoint_dir=f"{work}/checkpoints/{name}", debug_folder=f"{work}/debug/{name}")
+for key, env in (("num_workers", "NUM_WORKERS"), ("prefetch_factor", "PREFETCH_FACTOR")):
+    if os.environ.get(env):
+        c[key] = int(os.environ[env])
 json.dump(c, open(dst, "w"), indent=2)
 EOF
     python -m src.neural_network.experiment.saliency_using_FIREnetwork_events_v2 \

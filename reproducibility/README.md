@@ -13,6 +13,7 @@ derived data on your own machine with the code that was used for the paper.
 | [`manifests/ecoco_intensity_split.csv`](manifests/ecoco_intensity_split.csv) | The 948 + 51 ECOCO sequences used for intensity reconstruction: ID, split, frames, timestamps, processed ID, content hash |
 | [`experiments.yaml`](experiments.yaml) | Paper experiment → inputs → configs as run → numerical results → notebook, with what the records do not establish |
 | [`audit.md`](audit.md) | What the pipeline actually did, with evidence, and the open questions |
+| [`paper_corrections.md`](paper_corrections.md) | The resulting corrections for the manuscript, in plain terms |
 | [`validation_report.md`](validation_report.md) | What was checked on real data, how, and the results |
 | [`regenerate.py`](regenerate.py) | Local regeneration (below) |
 | [`tools/`](tools/), [`records/`](records/) | How the manifests were derived from the lab records, and log extracts |
@@ -102,7 +103,7 @@ are keyed by the loaders' own (incomplete) rules; see `audit.md`, *Cache identit
 
 Commands for staging the data on Hugging Face (private) and training on a cloud GPU are in the root
 README, [section 4 of *Reproducing the experiments*](../README.md#4-rerunning-the-fixed-rate-dvs-experiment-fig-12-on-a-cloud-gpu).
-The script is `scripts/runpod/dvs_fixed_200fps.sh`.
+The script is `scripts/runpod/dvs_fixed_200fps.sh`. [`scripts/runpod/AGENT_BRIEF.md`](../scripts/runpod/AGENT_BRIEF.md) is a step-by-step brief for running it over SSH, and `scripts/runpod/export_fig12_runs.py` puts the new runs into the Figure 12 data.
 
 ## Reproducibility limits
 

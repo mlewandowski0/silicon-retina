@@ -82,3 +82,22 @@ not settle it.
   - Validation: TF 2.20.0, torch 2.10.0+cu128, cuDNN 9.10.2.
   - `scripts/setup/requirements-full-freeze.txt` is not the environment of the saliency upsampling.
   - With torch 2.10 and TF 2.20 in one process, TF must initialise cuDNN first or FILM fails (handled in `regenerate.py`).
+
+## Manuscript cross-check (preprint dated 2026-10-28)
+
+Statements in the manuscript compared with the run records and exports. Items 1–3 of the saliency
+discrepancies above (split, OF video versions, fixed-rate DVS runs) are not repeated here.
+
+| Where | Manuscript | Records | Suggested action |
+|---|---|---|---|
+| §1 contributions; Abstract-level claim | "Code, models, ... are currently being prepared for release and will be made available" | Code and configs are public. Trained models are not released | Say the code is available; drop "models" or release checkpoints |
+| §1, §4.4.4 | Retina "13 % lower loss ... 47 % sparser"; best val loss 0.695 vs 0.799, occupancy ≈ 5.7 % vs ≈ 10.8 % | 0.695 is run `FIRE_saliency_p2=1.0_20251128_082440` (recorded occupancy 6.78 %). 5.7 % is run `FIRE_saliency_seq=50_gk5_20251201_014614` (best val 0.704). The DVS occupancy 10.86 % is from the Feb 2026 optical-flow runs | Quote one run: 28 Nov run = 13 % lower loss, 37 % sparser; 1 Dec run = 12 % lower, 47 % sparser |
+| §4.3.2 | FireNet "≈ 38k" parameters | The intensity runs log 130,785 parameters (`hid1` 32) | Correct to ≈ 131k |
+| §4.4.3 | "≈ 100k parameters" | The saliency runs log 130,977 parameters | Correct to ≈ 131k |
+| §4.3.2, Data availability | Event-MS-COCO cited as [2] (Scheerlinck et al., FireNet) | The sequences come from the E2VID work (Rebecq et al., [48] / TPAMI 2019); the archive is `ecoco_depthmaps_test.zip` | Cite [48] (or the TPAMI paper) for the dataset |
+| §4.3.4 | Best retina ≈ 0.448 with "burnin set to 0 and 10" | 0.448 is the export column `retina : seq = 20`. Its burn-in is not recorded; the notebook labels it "burnin=0". The retina runs themselves are not identified (above) | Keep, but the burn-in label is an assumption |
+| §4.5.1 | Abs. feedback < 4 % occupancy, val 0.700; quadratic 6.83 %, 0.714; none 16.8 %, 0.724 | The run labelled "quad_fb" stopped after 2 epochs. 0.714 and 6.83 % are values typed into the notebook, matching the Nov-30 `seq=30_quad_fb` run (old kernel, other config). The run labelled "abs_fb" recorded mode 1 = QUADRATIC | Check which mode each run used. Rerun quadratic feedback if needed |
+| §4.5.2 | HPF ablation values | Values typed into notebook cell 26. Final val loss of t2–t4 is NaN in the records | Document how the values were taken (best epoch?) |
+| §4.6, Fig. 12 | "DVS (Optical Flow)" over 7 seeds; "DVS (Fixed 200 FPS)" over 3 seeds | 7 runs with different thresholds (0.2 ×3, 0.225, 0.25, 0.275, 0.3); no seeds are set. The fixed-rate runs have mistimed events | Rerun with `scripts/runpod/dvs_fixed_200fps.sh`; describe the runs as repeats / threshold variants |
+| §4.4.2 | Lengths "900 to 5000 frames after upsampling"; videos with unreliable optical flow removed, e.g. a montage | Selection = < 750 source frames (542 clips) minus clip 058, which failed in optical-flow upsampling. Whether 058 is a montage was not checked | Describe the actual rule |
+| Data availability | — | A proposed replacement is in `data_availability.tex` | — |

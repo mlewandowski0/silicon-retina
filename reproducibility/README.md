@@ -98,6 +98,12 @@ ln -s $OUT/intensity/upsampled-all-<fp>/validation   src/neural_network/data/ups
 The training scripts then build their own event caches inside those folders on first use. Those caches
 are keyed by the loaders' own (incomplete) rules; see `audit.md`, *Cache identity*.
 
+## Rerunning the fixed-rate DVS experiment (Fig. 12)
+
+Commands for staging the data on Hugging Face (private) and training on a cloud GPU are in the root
+README, [section 4 of *Reproducing the experiments*](../README.md#4-rerunning-the-fixed-rate-dvs-experiment-fig-12-on-a-cloud-gpu).
+The script is `scripts/runpod/dvs_fixed_200fps.sh`.
+
 ## Reproducibility limits
 
 * **FILM upsampling is not bitwise reproducible**, even on the same machine: about 1.5–2 grey levels mean difference, 38–40 dB PSNR. Retina events computed from a given upsampled video are bitwise reproducible. DVS event lists are too; DVS voxel grids differ in ≈ 0.001 % of voxels. Regenerated event datasets are therefore statistically, not bitwise, equal to the originals. Expect run-to-run variation in trained results as well, since training is unseeded.

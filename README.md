@@ -26,7 +26,7 @@ This repository contains the code, configurations, experiment records and figure
 - [Repository map](#repository-map) · [Where is…?](#where-is)
 - [Quick start (no dataset needed)](#quick-start-no-dataset-needed)
 - [The retina model and its implementations](#the-retina-model-and-its-implementations)
-- [Reproducing the experiments](#reproducing-the-experiments): [data](#1-data-and-models) · [pipeline](#2-pipeline) · [figure → code table](#3-paper-figures--code) · [local data regeneration](reproducibility/README.md)
+- [Reproducing the experiments](#reproducing-the-experiments): [data](#1-data-and-models) · [pipeline](#2-pipeline) · [figure → code table](#3-paper-figures--code) · [Fig. 12 rerun on a cloud GPU](#4-rerunning-the-fixed-rate-dvs-experiment-fig-12-on-a-cloud-gpu) · [local data regeneration](reproducibility/README.md)
 - [Hardware](#hardware): [SCAMP-5](#scamp-5-pixel-processor-array) · [VD55G0 live demo](#vd55g0--gpu-live-demo)
 - [Reproducibility notes](#reproducibility-notes)
 - [Third-party components](#third-party-components) · [Citation](#citation)
@@ -244,6 +244,44 @@ The figure notebooks read the W&B exports in `paper-figures/analysis/*.csv`, so 
   <img src="media/readme/sparsity_vs_performance.png" width="560" alt="Saliency loss versus event grid occupancy for the retina (p2 sweep) and the DVS (contrast threshold sweep)">
   <br><em>Saliency validation loss vs. event-grid occupancy: a sweep of the retina ganglion gain p₂ against a sweep of the DVS contrast threshold.</em>
 </p>
+
+### 4. Rerunning the fixed-rate DVS experiment (Fig. 12) on a cloud GPU
+
+The original "DVS (Fixed 200 FPS)" runs paired the 200 FPS video with the optical-flow timestamps, so their events were mistimed ([`reproducibility/audit.md`](reproducibility/audit.md)). The corrected experiment uses the config [`FIREnetwork_event_saliency_fixed_200fps.json`](src/neural_network/configs/saliency/events/FIREnetwork_event_saliency_fixed_200fps.json) (`"dvs_input_video": "fixed_200fps"`). It reads the same 200 FPS videos as the retina runs, with their own timestamps.
+
+**1. Data.** Done once, on the machine that holds `saliency_dataset_ready/`. This stages the 541 clips' 200 FPS inputs (31.3 GB, hard links plus `SHA256SUMS`) and uploads them to a **private** Hugging Face dataset. DHF1K-derived data must not be made public.
+
+```bash
+python -m reproducibility.tools.stage_saliency_upload \
+    --ready src/neural_network/data/saliency_dataset_ready --out /path/to/hf_dhf1k_200fps
+# private repo used for the paper rerun: mlewand/silicon-retina-dhf1k-200fps
+hf auth login
+python -c "from huggingface_hub import HfApi; HfApi().create_repo('<user>/<repo>', repo_type='dataset', private=True, exist_ok=True)"
+hf upload <user>/<repo> /path/to/hf_dhf1k_200fps . --repo-type dataset
+```
+
+**2. Training on the GPU machine** (e.g. RunPod RTX 4090). Use a PyTorch *devel* image, because building `esim_torch` needs `nvcc`, and put everything on the persistent volume:
+
+```bash
+cd /workspace
+git clone -b reproducibility https://github.com/mlewandowski0/sillicon-retina.git && cd sillicon-retina
+export HF_TOKEN=hf_...                                    # read access to the private dataset
+export HF_DATASET=mlewand/silicon-retina-dhf1k-200fps     # the default
+export WANDB_API_KEY=...                                  # or: export WANDB_MODE=offline
+# optional: export TORCH_INDEX=https://download.pytorch.org/whl/cu126   (match the pod's CUDA driver)
+bash scripts/runpod/dvs_fixed_200fps.sh 3                 # 3 runs, ~6.7 h each on an RTX 4090
+```
+
+[`scripts/runpod/dvs_fixed_200fps.sh`](scripts/runpod/dvs_fixed_200fps.sh) does the following:
+
+1. Installs the training environment (without TensorFlow) and builds `esim_torch`.
+2. Downloads the dataset and verifies its checksums.
+3. Links it to `src/neural_network/data/saliency_dataset_ready`.
+4. Trains `DVS_fixed_200fps_run1..3` one after another; the first run builds the event caches.
+
+Logs, configs and checkpoints are written to `/workspace/{logs,configs,checkpoints}`. If the pod restarts, re-running the script skips finished setup steps and runs.
+
+**3. Figure.** Export `train_loss_epoch` and `val_loss_epoch` of the three runs from W&B (project `e2vid-saliency2`) into `paper-figures/analysis/comparison_{train,val}_loss.csv`. They replace the columns `FIREnetwork_20260211_131459`, `FIREnetwork_20260211_200608` and `FIREnetwork_20260212_025427`; update the column lists in `paper-figures/analysis_saliency.ipynb` (cells 33–37) to match. Then re-run the notebook.
 
 ---
 

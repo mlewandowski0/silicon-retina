@@ -115,7 +115,9 @@ experiments:
       retina_fixed_200fps: {note: reuses kernel / feedback runs}
     results: [paper-figures/analysis/comparison_train_loss.csv, paper-figures/analysis/comparison_val_loss.csv,
               "paper-figures/{train,val}_stats_*.csv"]
-    regenerate_variants: [retina_ff200, retina_of, dvs_of]
+    regenerate_variants: [retina_ff200, retina_of, dvs_of, dvs_ff200]
+    corrected_rerun: {config: src/neural_network/configs/saliency/events/FIREnetwork_event_saliency_fixed_200fps.json,
+                      script: scripts/runpod/dvs_fixed_200fps.sh, note: "DVS on the retina's 200 FPS videos with their own timestamps (dvs_input_video: fixed_200fps)"}
     status: >-
       the "DVS (Fixed 200 FPS)" curve of Fig. 12 is invalid: its events carry the wrong timestamps
       (median error 2.2 s per clip, ~4.6 s at clip end; ~13% of each clip without events), so its

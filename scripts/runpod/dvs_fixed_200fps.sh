@@ -8,7 +8,7 @@
 #
 # On the pod, from the repository root (use a persistent volume, e.g. /workspace):
 #   export HF_TOKEN=hf_...                   # read access to the private dataset
-#   export HF_DATASET=<user>/<dataset-repo>  # staged with reproducibility/tools/stage_saliency_upload.py
+#   export HF_DATASET=...                    # default: the private repo mlewand/silicon-retina-dhf1k-200fps
 #   export WANDB_API_KEY=...                 # or WANDB_MODE=offline
 #   bash scripts/runpod/dvs_fixed_200fps.sh [number of runs, default 3]
 #
@@ -22,7 +22,7 @@ WORK=${WORK:-/workspace}
 DATA=${DATA_DIR:-$WORK/data/dhf1k_200fps}
 TORCH_INDEX=${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}   # match the pod's CUDA driver
 CONFIG=src/neural_network/configs/saliency/events/FIREnetwork_event_saliency_fixed_200fps.json
-: "${HF_DATASET:?set HF_DATASET=<user>/<dataset-repo>}"
+HF_DATASET=${HF_DATASET:-mlewand/silicon-retina-dhf1k-200fps}   # staged with reproducibility/tools/stage_saliency_upload.py
 mkdir -p "$WORK/logs" "$WORK/configs"
 
 # 1. environment (training only: no TensorFlow / GUI packages)
